@@ -2,7 +2,6 @@
 
 '''
 Python API for Box.com
-Based on the python-twitter api
 '''
 
 __author__ = 'tufelkinder@yahoo.com'
