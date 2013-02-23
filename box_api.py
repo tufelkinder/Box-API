@@ -69,7 +69,10 @@ class JSONAwareObject(object):
     def asDict(self):
         vals = []
         for field in self.FIELDS:
-            vals.append(getattr(self,field))
+            if isintance(getattr(self,field),JSONAwareObject):
+                vals.append(getattr(self,field).asDict())
+            else:
+                vals.append(getattr(self,field))
         data = dict(zip(self.FIELDS,vals))
         return data
 
@@ -1551,9 +1554,9 @@ class Api(object):
     def authRefresh(self):
         url = 'https://api.box.com/oauth2/token'
         data = {
+            'refresh_token': self._refresh_token,
             'client_id': self._client_id,
             'client_secret': self._client_secret,
-            'refresh_token': self._refresh_token,
             'grant_type': 'refresh_token'
         }
 
