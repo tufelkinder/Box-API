@@ -69,6 +69,7 @@ class JSONAwareObject(object):
     def asDict(self):
         vals = []
         for field in self.FIELDS:
+            
             if isintance(getattr(self,field),JSONAwareObject):
                 vals.append(getattr(self,field).asDict())
             else:
