@@ -8,20 +8,16 @@ __author__ = 'tufelkinder@yahoo.com'
 __version__ = '0.0.1'
 
 
-import calendar
+#import calendar
+#import gzip
+#import StringIO
 from datetime import timedelta, datetime
-import httplib
 import os
 import rfc822
 import sys
 import tempfile
 import textwrap
 import time
-import urllib
-import urllib2
-import urlparse
-import gzip
-import StringIO
 import requests
 
 try:
