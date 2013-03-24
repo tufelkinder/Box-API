@@ -7,10 +7,9 @@ Python API for Box.com
 __author__ = 'tufelkinder@yahoo.com'
 __version__ = '0.0.1'
 
+# Timezone note: This API attempts to handle dates in a timezone aware
+# fashion but there are some issues with this.
 
-#import calendar
-#import gzip
-#import StringIO
 from datetime import timedelta, datetime
 import os
 import rfc822
@@ -19,6 +18,9 @@ import tempfile
 import textwrap
 import time
 import requests
+import pytz
+from django.utils.timezone import utc
+#utc=pytz.UTC
 
 try:
   # Python >= 2.6
@@ -69,7 +71,7 @@ class JSONAwareObject(object):
     def asDict(self):
         vals = []
         for field in self.FIELDS:
-            if isintance(getattr(self,field),JSONAwareObject):
+            if isinstance(getattr(self,field),JSONAwareObject):
                 vals.append(getattr(self,field).asDict())
             else:
                 vals.append(getattr(self,field))
@@ -1548,7 +1550,10 @@ class Api(object):
 
 
     def tokenExpired(self):
-        return self._token_expiration < datetime.now()
+        try:
+            return datetime.utcnow().replace(tzinfo=utc) > self._token_expiration
+        except:
+            return True
 
 
     def authRefresh(self):
@@ -1561,14 +1566,14 @@ class Api(object):
         }
 
         response = requests.post(url, data=data)
-        auth_info = response.json
+        auth_info = response.json()
         try:
             error = auth_info['error']
             error_desc = auth_info['error_description']
             return { "error": error, "error_desc": error_desc }
         except:
             self._access_token = auth_info['access_token']
-            self._token_expiration = datetime.now() + timedelta(seconds=int(auth_info['expires_in']))
+            self._token_expiration = datetime.utcnow().replace(tzinfo=utc) + timedelta(seconds=int(auth_info['expires_in']))
             self._token_type = auth_info['token_type']
             self._refresh_token = auth_info['refresh_token']
         return True
@@ -1586,7 +1591,7 @@ class Api(object):
 
     # Folders
 
-    def getFolderItems(self,folder_id,offset=None,limit=None):
+    def getFolderItems(self,folder_id,offset=None,limit=None,debug=False):
         headers = self.getHeaders()
         data = {}
         if offset:
@@ -1595,11 +1600,11 @@ class Api(object):
             data['limit'] = limit
         url = self.base_url + '/folders/{0}/items'.format(folder_id)
         response = requests.get(url,headers=headers,params=data)
-        folder_items = response.json
+        folder_items = response.json()
         try:
             item_count = folder_items['total_count'] 
         except:
-            raise BoxError('getFolderItems failed: ' + folder_items)
+            raise BoxError('getFolderItems failed: ' + str(folder_items))
         items = list()
         # convert to a list of mini folder objects
         for item in folder_items['entries']:
@@ -1610,6 +1615,8 @@ class Api(object):
                 fi = BoxFile(box_type='file')
                 fi.newFromJsonDict(fi,item)
             items.append(fi)
+        if debug:
+            return folder_items
         return items
 
 
@@ -1617,7 +1624,10 @@ class Api(object):
         headers = self.getHeaders()
         url = self.base_url + '/folders/{0}'.format(folder_id)
         response = requests.get(url,headers=headers)
-        folder_info = response.json
+        folder_info = response.json()
+        bf = BoxFolder(box_type='folder')
+        bf.newFromJsonDict(bf,folder_info)
+        return bf
 
 
     def createFolder(self,folder_name,parent_id):
@@ -1628,9 +1638,10 @@ class Api(object):
             "parent": { "id": parent_id }
         })
         response = requests.post(url,headers=headers,data=data)
-        folder_info = response.json
-        # parse folder_info into folder object??
-        return folder_info
+        folder_info = response.json()
+        bf = BoxFolder(box_type='folder')
+        bf.newFromJsonDict(bf,folder_info)
+        return bf
 
 
     def copyFolder(self,folder_id,dest_parent_id,new_folder_name):
@@ -1641,7 +1652,20 @@ class Api(object):
             "parent": { "id": dest_parent_id }
         })
         response = requests.post(url,headers=headers,data=data)
-        folder_info = response.json
+        folder_info = response.json()
+        bf = BoxFolder(box_type='folder')
+        bf.newFromJsonDict(bf,folder_info)
+        return bf
+
+
+    def moveFolder(self,folder_id,dest_parent_id):
+        headers = self.getHeaders()
+        url = self.base_url + '/folders/{0}'.format(folder_id)
+        data = json.dumps({
+            "parent": { "id": dest_parent_id }
+        })
+        response = requests.put(url,headers=headers,data=data)
+        folder_info = response.json()
         bf = BoxFolder(box_type='folder')
         bf.newFromJsonDict(bf,folder_info)
         return bf
@@ -1682,7 +1706,7 @@ class Api(object):
         files = {'filename': (filename, open(src_file,'rb'))}
         data = json.dumps( {"folder_id": parent_id,} )
         response = requests.post(url, data=data, files=files, headers=headers)
-        file_info = response.json
+        file_info = response.json()
         # parse folder_info into folder object??
         return file_info
 
@@ -1695,7 +1719,7 @@ class Api(object):
         files = {'filename': (filename, open(src_file,'rb'))}
         data = json.dumps( {"folder_id": parent_id,} )
         response = requests.post(url, data=data, files=files, headers=headers)
-        file_info = response.json
+        file_info = response.json()
         # parse folder_info into folder object??
         return file_info
 
@@ -1720,7 +1744,7 @@ class Api(object):
         headers = self.getHeaders()
         url = self.base_url + '/files/{0}'.format(file_id)
         response = requests.get(url,headers=headers)
-        file_info = response.json
+        file_info = response.json()
         bf = BoxFile(box_type='file')
         bf.newFromJsonDict(bf,file_info)
         return bf
@@ -1745,7 +1769,7 @@ class Api(object):
                 "parent": { "id": dest_parent_id }
             })
         response = requests.post(url,headers=headers,data=data)
-        file_info = response.json
+        file_info = response.json()
         bf = BoxFolder(box_type='file')
         bf.newFromJsonDict(bf,file_info)
         return bf
@@ -1817,10 +1841,11 @@ class Api(object):
         headers = self.getHeaders()
         url = self.base_url + '/users/me'
         response = requests.get(url,headers=headers)
-        user_info = response.json
+        user_info = response.json()
         bu = BoxUser(box_type='user')
         bu.newFromJsonDict(bu,user_info)
         return bu
+
 
     def getAllUsers(self,filter_term=None,limit=None,offset=None):
         headers = self.getHeaders()
@@ -1836,7 +1861,7 @@ class Api(object):
             response = requests.get(url,headers=headers,params=data)
         else:
             response = requests.get(url,headers=headers)
-        users_info = response.json
+        users_info = response.json()
         results = list()
         try:
             entries = users_info['entries']
@@ -1848,13 +1873,14 @@ class Api(object):
             results.append(bu)
         return results
 
+
     def updateUser(self,user_id,notify,field_dict):
         pass
 
     def createUser(self,login,name,field_dict):
         pass
 
-    def moveFolder(self,destination_user_id,notify,destination_folder_id):
+    def moveFolderToUser(self,destination_user_id,notify,destination_folder_id):
         pass
 
     def deleteUser(self,user_id,notify,force):
@@ -1885,7 +1911,7 @@ class Api(object):
         if offset:
             data['offset'] = offset
         response = requests.get(url,headers=headers,params=data)
-        search_results = response.json
+        search_results = response.json()
         items = list()
         try:
             entries = search_results['entries']
@@ -1918,7 +1944,7 @@ class Api(object):
         if limit:
             data['limit'] = limit
         response = requests.get(url,headers=headers,params=data)
-        events_json = response.json
+        events_json = response.json()
         next_pos = False
         events = list()
         try:
