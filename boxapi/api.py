@@ -24,7 +24,7 @@ from django.utils.timezone import utc
 # otherwise:
 # utc=pytz.UTC
 
-import objects
+from boxapi.objects import *
 
 try:
   # Python >= 2.6
