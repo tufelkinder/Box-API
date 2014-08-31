@@ -5,7 +5,7 @@ Python API for Box.com
 '''
 
 __author__ = 'tufelkinder@yahoo.com'
-__version__ = '0.0.1'
+__version__ = '0.0.6'
 
 
 from datetime import timedelta, datetime
@@ -1388,7 +1388,20 @@ class Collaboration(JSONAwareObject):
         return self._accessible_by
 
     def setAccessibleBy(self,accessible_by):
-        self._accessible_by = accessible_by
+        if accessible_by['type'] == 'user':
+            try:
+                bu = BoxUser(box_type='user')
+                bu.newFromJsonDict(bu,accessible_by)
+                self._accessible_by = bu
+            except:
+                self._accessible_by = accessible_by
+        elif accessible_by['type'] == 'group':
+            try:
+                bg = BoxGroup(box_type='group')
+                bg.newFromJsonDict(bg,accessible_by)
+                self._accessible_by = bg
+            except:
+                self._accessible_by = accessible_by
 
     accessible_by = property(getAccessibleBy,setAccessibleBy,doc="")
 
@@ -1605,7 +1618,14 @@ class Api(object):
     api.removeUserEmail(user_id,email_alias_id)
     api.changeUserLogin(user_id,login)
     api.getUserEmails(user_id)
-    
+
+    # collaborations
+    api.addCollaboration(folder_id,notify)
+    api.addCollaboration(folder_id,user_id,group_id,role,notify) # must specify either user_id OR group_id
+    api.editCollaboration(collab_id,)
+    api.removeCollaboration(notify)
+    api.retrieveCollaboration(notify)
+
     # Search
     api.search(query,limit,offset)
 
@@ -2038,6 +2058,43 @@ class Api(object):
 
     def getUserEmails(self,user_id):
         pass
+
+    def getCollaborations(self,folder_id):
+        headers = self.getHeaders()
+        url = self.base_url + '/folders/{0}/collaborations'.format(folder_id)
+        response = requests.get(url,headers=headers)
+        item_info = response.json()
+        items = []
+        for item in item_info['entries']:
+            cb = Collaboration(box_type='collaboration')
+            cb.newFromJsonDict(cb,c_info)
+            items.append(cb)
+        return items
+
+
+    def addCollaboration(self,folder_id,user_id=None,group_id=None,role,notify=None):
+        headers = self.getHeaders()
+        url = self.base_url + '/collaborations'
+        data = {
+            "item": { "id": folder_id, "type": 'folder' },
+            "role": role
+        }
+        if user_id:
+            data["accessible_by"] = { "id": user_id, "type": 'user' }
+        elif group_id:
+            data["accessible_by"] = { "id": group_id, "type": 'group' }
+        else:
+            # we should reject this request immediately
+            pass
+        if notify:
+            params = { 'notify': 'true' }
+        else:
+            params = { 'notify': 'false' }
+        response = requests.post(url,headers=headers,data=data,params=params)
+        collab_info = response.json()
+        cb = Collaboration(box_type='collaboration')
+        cb.newFromJsonDict(cb,collab_info)
+        return cb
 
 
     # Search
